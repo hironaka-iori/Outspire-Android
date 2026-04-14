@@ -1,22 +1,22 @@
 package com.computerization.outspire.feature.today
 
 import com.computerization.outspire.data.model.DomainClass
-import kotlin.time.Duration
+import kotlinx.datetime.LocalTime
 
 sealed interface TodayUiState {
     data object Loading : TodayUiState
 
-    data class InClass(
-        val current: DomainClass,
-        val remaining: Duration,
+    data class Weekday(
+        val dayName: String,
+        val classes: List<DomainClass>,
+        val activeIndex: Int?,
+        val now: LocalTime,
     ) : TodayUiState
 
-    data class Break(
-        val next: DomainClass,
-        val until: Duration,
+    data class DayDone(
+        val isWeekend: Boolean,
+        val isAfterSchool: Boolean,
     ) : TodayUiState
-
-    data class Done(val lastSubject: String?, val isWeekend: Boolean) : TodayUiState
 
     data class Error(val message: String) : TodayUiState
 }

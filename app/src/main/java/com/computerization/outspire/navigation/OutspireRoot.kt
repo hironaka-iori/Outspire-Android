@@ -79,7 +79,15 @@ fun OutspireRoot(
                     }
                 })
             }
-            composable(Routes.TODAY) { TodayScreen() }
+            composable(Routes.TODAY) {
+                TodayScreen(onNavigate = { route ->
+                    navController.navigate(route) {
+                        popUpTo(Routes.TODAY) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
             composable(Routes.ACADEMIC) { AcademicScreen() }
             composable(Routes.CAS) { CasScreen() }
             composable(Routes.SETTINGS) { SettingsScreen() }

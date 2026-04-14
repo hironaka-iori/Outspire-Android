@@ -11,18 +11,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import javax.inject.Inject
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 @HiltViewModel
@@ -32,8 +29,6 @@ class TodayViewModel @Inject constructor(
 
     private val classesFlow = MutableStateFlow<List<DomainClass>?>(null)
     private val errorFlow = MutableStateFlow<String?>(null)
-    private val _weekFlow = MutableStateFlow<Map<DayOfWeek, List<DomainClass>>>(emptyMap())
-    val weekFlow: StateFlow<Map<DayOfWeek, List<DomainClass>>> = _weekFlow.asStateFlow()
 
     init {
         load()
@@ -49,8 +44,7 @@ class TodayViewModel @Inject constructor(
         when {
             error != null && classes == null -> TodayUiState.Error(error)
             classes == null -> TodayUiState.Loading
-            classes.isEmpty() -> TodayUiState.Done(null, isWeekend)
-            else -> computeState(now, classes, isWeekend)
+            else -> computeState(now, classes, isWeekend, dow)
         }
     }.stateIn(
         scope = viewModelScope,
@@ -66,7 +60,6 @@ class TodayViewModel @Inject constructor(
                 classesFlow.value = MockClasstable.today.map {
                     DomainClass(it.subject, it.teacher, it.room, it.start, it.end)
                 }
-                _weekFlow.value = emptyMap()
                 return@launch
             }
             repository.todayClasses()
@@ -77,9 +70,6 @@ class TodayViewModel @Inject constructor(
                 .onFailure { t ->
                     errorFlow.value = t.message ?: "Failed to load timetable"
                 }
-            repository.weekClasses()
-                .onSuccess { _weekFlow.value = it }
-                .onFailure { /* ignore; today already reported */ }
         }
     }
 
@@ -88,26 +78,33 @@ class TodayViewModel @Inject constructor(
             now: Instant,
             classes: List<DomainClass>,
             isWeekend: Boolean = false,
+            dayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
         ): TodayUiState {
+            if (isWeekend) return TodayUiState.DayDone(isWeekend = true, isAfterSchool = false)
+            if (classes.isEmpty()) return TodayUiState.DayDone(isWeekend = false, isAfterSchool = false)
             val nowLocal = now.toLocalDateTime(TimeZone.currentSystemDefault()).time
-
-            val current = classes.firstOrNull { nowLocal >= it.start && nowLocal < it.end }
-            if (current != null) {
-                val remaining = (current.end.secondOfDay() - nowLocal.secondOfDay()).seconds
-                return TodayUiState.InClass(current, remaining.clampPositive())
+            if (classes.all { nowLocal >= it.end }) {
+                return TodayUiState.DayDone(isWeekend = false, isAfterSchool = true)
             }
-            val next = classes.firstOrNull { nowLocal < it.start }
-            if (next != null) {
-                val until = (next.start.secondOfDay() - nowLocal.secondOfDay()).seconds
-                return TodayUiState.Break(next, until.clampPositive())
-            }
-            return TodayUiState.Done(classes.lastOrNull()?.subject, isWeekend)
+            val activeIdx = classes.indexOfFirst { nowLocal >= it.start && nowLocal < it.end }
+                .takeIf { it >= 0 }
+            return TodayUiState.Weekday(
+                dayName = dayName(dayOfWeek),
+                classes = classes,
+                activeIndex = activeIdx,
+                now = nowLocal,
+            )
         }
 
-        private fun LocalTime.secondOfDay(): Int =
-            hour * 3600 + minute * 60 + second
-
-        private fun Duration.clampPositive(): Duration =
-            if (this < Duration.ZERO) Duration.ZERO else this
+        private fun dayName(d: DayOfWeek): String = when (d) {
+            DayOfWeek.MONDAY -> "Monday"
+            DayOfWeek.TUESDAY -> "Tuesday"
+            DayOfWeek.WEDNESDAY -> "Wednesday"
+            DayOfWeek.THURSDAY -> "Thursday"
+            DayOfWeek.FRIDAY -> "Friday"
+            DayOfWeek.SATURDAY -> "Saturday"
+            DayOfWeek.SUNDAY -> "Sunday"
+            else -> ""
+        }
     }
 }
