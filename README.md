@@ -1,116 +1,80 @@
-# Outspire Android
+# Outspire for Android
 
-A native Android port of [Outspire](https://github.com/Computerization/Outspire) (iOS), built against the real TSIMS backend.
+A fresh native Android implementation of [Computerization/Outspire](https://github.com/Computerization/Outspire). It uses the Swift project as its behavioural and visual specification and does not reuse the abandoned Android repository.
 
-- **Status**: working demo against production TSIMS — login, timetable, scores, and CAS all hit live endpoints.
-- **Stack**: Kotlin 2.0 · Jetpack Compose · Material 3 · Hilt · Navigation-Compose · Ktor (OkHttp engine) · kotlinx-serialization · kotlinx-datetime · Jsoup
-- **minSdk**: 26 (Android 8.0) · **targetSdk**: 35
+## Current milestone
 
-## Run it
+This project provides a working application foundation:
+
+- Kotlin and Jetpack Compose UI with Material 3
+- feature-based MVVM structure
+- four primary destinations: Today, Class, Activities, and Explore
+- live one-second timetable progress and the original nine-period schedule
+- weekday preview, self-study filling, subject colours, and quick links
+- explicit demo mode with representative timetable, grades, and CAS records
+- cookie-based TSIMS login and session verification
+- TSIMS academic-year discovery and timetable decoding for both response formats used by the Swift app
+- account, grades, CAS summary, dark theme, deep-link declaration, and unit tests
+
+Live score and CAS endpoints are deliberately isolated behind `OutspireRepository`; their Compose screens already consume the domain models. They can be connected without changing the UI.
+
+## Requirements
+
+- Android Studio compatible with Android Gradle Plugin 8.13
+- JDK 17
+- Android SDK 36
+- Gradle 8.13
+- Android 8.0 or later on the device (`minSdk 26`)
+
+The Gradle wrapper binary is omitted from this generated source archive. Generate it once with an installed Gradle:
 
 ```bash
-./gradlew assembleDebug
-./gradlew test
+gradle wrapper --gradle-version 8.13
+./gradlew test assembleDebug
 ```
 
-Or open the project in Android Studio (Koala+), select `app`, and run on an emulator or device.
+Alternatively, open the project in Android Studio and run the `app` configuration after generating or selecting Gradle 8.13.
 
-## Implemented
+## Configure TSIMS
 
-**Auth & session**
-- TSIMS login with real credentials (`/Home/Login` → `/Home/GetMenu` session verify → `/Home/StudentInfo` profile scrape)
-- EncryptedSharedPreferences for credentials + cookie jar + cached state
-- Auto-retry on 302/401 via `AuthService.withAuthRetry`
-- Live logout that clears cookies and navigates back to login reactively
+Copy `local.properties.example` to `local.properties`, add the Android SDK path, and set the server URL:
 
-**Today**
-- Live countdown to next lesson / break (1 Hz ticker)
-- 5-day (Mon–Fri) week-at-a-glance grid under the countdown card
-- Weekend placeholder copy
-
-**Academic (Scores)**
-- `POST /Stu/Exam/GetScoreData` with term picker (`ExposedDropdownMenuBox`)
-- iOS-parity score normalization (`"-"` → `"0"` for raw, `""` for IB)
-- Per-subject card with T1–T5 chip rows
-
-**Settings**
-- Real student ID + username from login profile
-- Term picker wired to `YearRepository` (persists via `SecureCredentialStore`)
-- Logout
-
-**CAS**
-- 3-tab scaffold: **My Clubs** · **Browse** · **Evaluation**
-- `GetMyGroupList` / `GetGroupList` (paginated infinite scroll over all ~100 clubs) / `JoinGroup`
-- Club detail screen with intro card (group no / teacher / full description) + Records and Reflections sub-tabs
-- `GetRecordList` / `GetReflectionList` read flow
-- **Full write flow**: add / edit / delete records (with ≥80-word reflection validation, C/A/S duration inputs, date field) and reflections (title / summary / content / LO chip selector) via `SaveRecord` / `DeleteRecord` / `SaveReflection` / `DeleteReflection`
-- `GetEvaluateData` semester breakdown (Rec / Ref / Talk / Final + per-club hours)
-
-**Year options**
-- Scrapes `<select id="YearId">` from `/Stu/Timetable/Index` with Jsoup
-- Persisted `currentYearId` shared across Timetable / Scores / CAS evaluation
-
-**Design system**
-- Material 3 theme with light/dark palettes aligned to the iOS app
-- Shared `AppSpace` / `AppRadius` tokens
-
-**Tests**
-- `TodayViewModelTest`, `ApiEnvelopeTest`, `TimetableMapperTest`, `TimetableWeekMapperTest`, `TsimsClientValidatorTest`
-- `YearOptionParserTest` — Jsoup scrape
-- `ScoreRepositoryTest` — iOS-parity score normalization
-- `CasDtoTest` — envelope decoding, `Theme`/`Title` fallback, dash-duration normalization, LO int → enum, paged envelope, plain-list envelope, evaluation mapping
-
-**CI**
-- GitHub Actions: `assembleDebug` + `test`
-
-## Not yet implemented
-
-- **Notices / Exam schedule / Attendance** endpoints
-- **CAS leader approval** (`GetGroupLeader`, confirm records) and progress ring (`GetRecordProgerss`)
-- **Room caching** / offline-first repositories
-- **Pull-to-refresh** on Today / Academic / CAS
-- **Rich HTML rendering** for reflection content (currently plain-text stripped)
-- **Keep-alive WorkManager** job to extend TSIMS session
-- **Biometric gate** on scores
-- **Glance widget**, deep links, App Links
-- **Proper HTTPS transport** — the app currently talks plain HTTP to the TSIMS host; must be wrapped before any store submission
-
-## Project layout
-
+```properties
+sdk.dir=/absolute/path/to/Android/Sdk
+tsims.baseUrl=https://your-secure-tsims-relay.example
 ```
-app/src/main/java/com/computerization/outspire/
-├── MainActivity.kt / OutspireApp.kt
-├── designsystem/                 # Theme / Tokens / Color / Type
-├── navigation/                   # Root scaffold + bottom nav + live auth gating
+
+Release builds reject cleartext HTTP. Debug builds permit it only for migration testing because the original Swift app currently points to an HTTP server. Credentials are kept in memory and are cleared when the process ends; secure credential persistence is intentionally deferred until biometric and Android Keystore requirements are defined.
+
+If `tsims.baseUrl` is empty, live login returns a configuration message and the user can select **Continue with demo data**.
+
+## Structure
+
+```text
+app/src/main/java/dev/outspire/android/
+├── MainActivity.kt
 ├── data/
-│   ├── local/                    # SecureCredentialStore
-│   ├── remote/                   # Ktor client, services, DTOs, cookie jar
-│   │   ├── AuthService.kt        # login / logout / withAuthRetry
-│   │   ├── TimetableService.kt
-│   │   ├── ScoreService.kt
-│   │   ├── YearService.kt        # Jsoup year-options scrape
-│   │   ├── CasService.kt         # all CAS endpoints
-│   │   └── dto/
-│   ├── repository/               # AuthRepository, TimetableRepository, ScoreRepository, YearRepository, CasRepository
-│   └── model/                    # Domain models
-└── feature/
-    ├── login/
-    ├── today/                    # countdown + week grid
-    ├── academic/                 # scores
-    ├── cas/                      # 3-tab CAS + club detail + editor dialogs
-    └── settings/
+│   ├── model/          Domain models and schedule logic
+│   ├── remote/         Isolated TSIMS HTTP client
+│   └── repository/     Repository contract, live adapter, demo data
+├── designsystem/       Theme, tokens, cards, status components
+├── feature/
+│   ├── account/
+│   ├── academic/
+│   ├── activities/
+│   ├── explore/
+│   └── today/
+└── navigation/         Root tabs and detail routes
 ```
 
-## Gradle Wrapper
+## Migration order
 
-The `gradle-wrapper.jar` binary is **not committed**. After cloning, either run:
+1. Harden authentication with Android Keystore-backed storage and reauthentication.
+2. Connect scores, including term selection and biometric protection.
+3. Connect CAS club browsing, activity records, reflections, and editing.
+4. Add school arrangements, dining menus, caching, and offline fallback.
+5. Add notifications, App Links, a Glance widget, and background session maintenance.
 
-```bash
-gradle wrapper --gradle-version 8.9
-```
+## Source reference
 
-or open the project in Android Studio — it will regenerate the wrapper automatically.
-
-## License
-
-TBD — intended to follow the iOS repo's license.
+The implementation was mapped from the original repository at commit `ed9dbfa3c481863844695e10ab9fded07ae5b0ea`, including `RootTabView`, `ClassPeriodsManager`, `ClassInfoParser`, `AuthServiceV2`, `TSIMSClientV2`, and `TimetableServiceV2`.

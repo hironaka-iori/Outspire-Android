@@ -1,86 +1,91 @@
+import java.util.Properties
+
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.hilt)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.kotlin.serialization)
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+fun quotedBuildConfig(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
-    namespace = "com.computerization.outspire"
-    compileSdk = 35
+    namespace = "dev.outspire.android"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.computerization.outspire"
+        applicationId = "dev.outspire.android"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "TSIMS_BASE_URL", "\"http://101.227.232.33:8001\"")
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables.useSupportLibrary = true
+        buildConfigField(
+            "String",
+            "TSIMS_BASE_URL",
+            quotedBuildConfig(localProperties.getProperty("tsims.baseUrl", "http://101.227.232.33:8001")),
+        )
     }
 
     buildTypes {
         debug {
-            buildConfigField("Boolean", "USE_MOCK_BACKEND", "false")
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
         release {
-            isMinifyEnabled = false
-            buildConfigField("Boolean", "USE_MOCK_BACKEND", "false")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+
     buildFeatures {
         compose = true
         buildConfig = true
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions.jvmTarget = "17"
+
+    packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
 }
 
 dependencies {
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.activity.compose)
+    val composeBom = platform("androidx.compose:compose-bom:2026.06.00")
+    implementation(composeBom)
+    androidTestImplementation(composeBom)
 
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material)
-    implementation(libs.androidx.compose.material.icons.extended)
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation("androidx.activity:activity-compose:1.12.4")
+    implementation("androidx.core:core-splashscreen:1.2.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.3")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    implementation(libs.androidx.navigation.compose)
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
-    implementation(libs.hilt.android)
-    ksp(libs.hilt.compiler)
-    implementation(libs.hilt.navigation.compose)
-
-    implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.kotlinx.datetime)
-    implementation(libs.kotlinx.serialization.json)
-
-    implementation(libs.ktor.client.core)
-    implementation(libs.ktor.client.okhttp)
-    implementation(libs.ktor.client.content.negotiation)
-    implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.ktor.client.logging)
-
-    implementation(libs.jsoup)
-    implementation(libs.androidx.security.crypto)
-    implementation(libs.androidx.datastore.preferences)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.turbine)
-    testImplementation(libs.ktor.client.mock)
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }

@@ -1,0 +1,4 @@
+# Copy this file to local.properties and add an HTTPS TSIMS endpoint.
+# Android SDK paths also commonly belong in local.properties:
+# sdk.dir=/absolute/path/to/Android/Sdk
+tsims.baseUrl=
