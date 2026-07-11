@@ -1,7 +1,6 @@
 package dev.outspire.android.data.repository
 
 import dev.outspire.android.data.model.CasActivity
-import dev.outspire.android.data.model.CasCategory
 import dev.outspire.android.data.model.ScheduleEntry
 import dev.outspire.android.data.model.SchoolWeek
 import dev.outspire.android.data.model.SubjectScore
@@ -41,27 +40,24 @@ internal object DemoData {
             title = "Sub-culture Week planning",
             club = "Doki-doki ACGN",
             date = LocalDate.now().minusDays(8),
-            categories = setOf(CasCategory.CREATIVITY, CasCategory.SERVICE),
-            hours = 5,
-            reflectionComplete = true,
+            creativityHours = 3.0,
+            serviceHours = 2.0,
+            reflection = "Planned the event with the team and reflected on how our roles supported one another.",
         ),
         CasActivity(
             id = "2",
             title = "Model evaluation workshop",
             club = "AI-Lab",
             date = LocalDate.now().minusDays(18),
-            categories = setOf(CasCategory.CREATIVITY),
-            hours = 3,
-            reflectionComplete = false,
+            creativityHours = 3.0,
         ),
         CasActivity(
             id = "3",
             title = "Campus technology support",
             club = "Computerization",
             date = LocalDate.now().minusDays(27),
-            categories = setOf(CasCategory.SERVICE),
-            hours = 4,
-            reflectionComplete = true,
+            serviceHours = 4.0,
+            reflection = "Supported students and staff while documenting recurring technical issues.",
         ),
     )
 }

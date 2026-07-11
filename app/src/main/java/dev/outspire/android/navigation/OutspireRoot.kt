@@ -154,13 +154,15 @@ fun OutspireRoot(
                         user = user,
                         onSignIn = { detail = "account" },
                         onRefresh = { academicViewModel.load(forceRefresh = true) },
-                        onSelectDay = academicViewModel::selectDay,
+                        onSelectDate = academicViewModel::selectDate,
+                        onToday = academicViewModel::selectToday,
                         modifier = contentModifier,
                     )
                     AppTab.ACTIVITIES -> ActivitiesScreen(
                         state = activitiesState,
                         user = user,
                         onSignIn = { detail = "account" },
+                        onRefresh = activitiesViewModel::load,
                         modifier = contentModifier,
                     )
                     AppTab.EXPLORE -> ExploreScreen(

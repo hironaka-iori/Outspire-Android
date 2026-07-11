@@ -68,7 +68,7 @@ class DefaultOutspireRepository(
         return if (user.isDemo) {
             Result.success(DemoData.activities)
         } else {
-            Result.failure(NotImplementedError("Live CAS migration is scheduled for the next milestone."))
+            client.loadActivities(user)
         }
     }
 }

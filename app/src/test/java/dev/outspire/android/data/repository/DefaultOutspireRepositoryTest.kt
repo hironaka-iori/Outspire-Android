@@ -1,8 +1,10 @@
 package dev.outspire.android.data.repository
 
 import dev.outspire.android.data.model.ScheduleEntry
+import dev.outspire.android.data.model.CasActivity
 import dev.outspire.android.data.model.User
 import dev.outspire.android.data.remote.TsimsDataSource
+import java.time.LocalDate
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -68,12 +70,36 @@ class DefaultOutspireRepositoryTest {
         assertNull(repository.session.value)
     }
 
+    @Test
+    fun `live activities are loaded from TSIMS after sign in`() = runTest {
+        val activity = CasActivity(
+            id = "4",
+            title = "Campus support",
+            club = "Computerization",
+            date = LocalDate.of(2026, 7, 10),
+            serviceHours = 2.0,
+        )
+        val client = FakeTsimsDataSource(
+            loginResult = Result.success(signedInUser),
+            activityResult = Result.success(listOf(activity)),
+        )
+        val repository = DefaultOutspireRepository(client)
+        repository.login("s20238123", "secret")
+
+        val result = repository.loadActivities()
+
+        assertEquals(listOf(activity), result.getOrThrow())
+        assertEquals(1, client.activityCalls)
+    }
+
     private class FakeTsimsDataSource(
         private val loginResult: Result<User>,
+        private val activityResult: Result<List<CasActivity>> = Result.success(emptyList()),
     ) : TsimsDataSource {
         override val isConfigured = true
         var loginCalls = 0
         var logoutCalls = 0
+        var activityCalls = 0
         var lastCode: String? = null
         var lastPassword: String? = null
 
@@ -92,5 +118,8 @@ class DefaultOutspireRepositoryTest {
 
         override suspend fun loadTimetable(user: User): Result<List<ScheduleEntry>> =
             Result.success(emptyList())
+
+        override suspend fun loadActivities(user: User): Result<List<CasActivity>> =
+            activityResult.also { activityCalls += 1 }
     }
 }

@@ -1,5 +1,6 @@
 package dev.outspire.android.data.remote
 
+import dev.outspire.android.data.model.CasActivity
 import dev.outspire.android.data.model.ScheduleEntry
 import dev.outspire.android.data.model.User
 import java.net.CookieHandler
@@ -10,6 +11,10 @@ import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.DayOfWeek
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -22,6 +27,7 @@ interface TsimsDataSource {
     suspend fun logout()
     fun clearSession()
     suspend fun loadTimetable(user: User): Result<List<ScheduleEntry>>
+    suspend fun loadActivities(user: User): Result<List<CasActivity>>
 }
 
 internal fun isUnexpectedLoginRedirect(requestPath: String, responsePath: String): Boolean =
@@ -63,6 +69,25 @@ class TsimsClient(baseUrl: String) : TsimsDataSource {
         val envelope = postForm("/Stu/Timetable/GetTimetableByStudent", form)
         check(envelope.resultIsSuccess()) { envelope.optString("Message", "Timetable request failed") }
         parseTimetable(envelope.opt("Data"))
+    }
+
+    override suspend fun loadActivities(user: User): Result<List<CasActivity>> = runCatching {
+        val groupEnvelope = postForm("/Stu/Cas/GetMyGroupList", emptyMap())
+        check(groupEnvelope.resultIsSuccess()) {
+            groupEnvelope.optString("Message", "Unable to load CAS groups.")
+        }
+        val groups = parseCasGroups(groupEnvelope.opt("Data"))
+        val recordEnvelope = postForm(
+            "/Stu/Cas/GetRecordList",
+            mapOf("pageIndex" to "1", "pageSize" to "100", "groupId" to ""),
+        )
+        check(recordEnvelope.resultIsSuccess()) {
+            recordEnvelope.optString("Message", "Unable to load CAS records.")
+        }
+        parseCasRecords(
+            data = recordEnvelope.opt("Data"),
+            groupsById = groups.associateBy(CasGroup::id),
+        ).sortedWith(compareByDescending<CasActivity> { it.date }.thenBy { it.title })
     }
 
     override suspend fun logout() {
@@ -253,6 +278,87 @@ class TsimsClient(baseUrl: String) : TsimsDataSource {
         }
     }
 
+    private data class CasGroup(val id: String, val name: String)
+
+    private fun parseCasGroups(data: Any?): List<CasGroup> {
+        val array = data.asJsonArray("List", "list", "Rows", "rows") ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val id = item.firstString("Id", "GroupId", "GroupNo", "C_GroupsID")
+                if (id.isBlank()) continue
+                val name = item.firstString("Name", "NameE", "NameC", "C_NameE", "C_NameC")
+                    .ifBlank { "CAS" }
+                add(CasGroup(id, name))
+            }
+        }
+    }
+
+    private fun parseCasRecords(data: Any?, groupsById: Map<String, CasGroup>): List<CasActivity> {
+        val array = data.asJsonArray("List", "list", "Rows", "rows", "casRecord") ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val groupId = item.firstString("GroupId", "GroupNo", "C_GroupsID")
+                val club = groupsById[groupId]?.name ?: "CAS"
+                val title = item.firstString("Title", "Theme", "C_Theme").ifBlank { "Untitled activity" }
+                val creativity = item.firstDouble("CDuration", "C_DurationC")
+                val activity = item.firstDouble("ADuration", "C_DurationA")
+                val service = item.firstDouble("SDuration", "C_DurationS")
+                val confirmation = item.firstIntOrNull("IsConfirm", "C_IsConfirm")
+                add(
+                    CasActivity(
+                        id = item.firstString("Id", "C_ARecordID").ifBlank { "$groupId-$index" },
+                        title = title,
+                        club = club,
+                        date = parseCasDate(item.firstString("Date", "ActivityDateStr", "C_Date")),
+                        creativityHours = creativity,
+                        activityHours = activity,
+                        serviceHours = service,
+                        reflection = item.firstString("Reflection", "C_Reflection"),
+                        confirmed = confirmation?.let { it != 0 },
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun Any?.asJsonArray(vararg keys: String): JSONArray? = when (this) {
+        is JSONArray -> this
+        is JSONObject -> keys.firstNotNullOfOrNull { key -> optJSONArray(key) }
+        else -> null
+    }
+
+    private fun JSONObject.firstString(vararg keys: String): String = keys
+        .asSequence()
+        .map { key -> opt(key) }
+        .firstOrNull { value -> value != null && value != JSONObject.NULL && value.toString().isNotBlank() }
+        ?.toString()
+        .orEmpty()
+
+    private fun JSONObject.firstDouble(vararg keys: String): Double = keys
+        .asSequence()
+        .mapNotNull { key ->
+            when (val value = opt(key)) {
+                is Number -> value.toDouble()
+                is String -> value.trim().toDoubleOrNull()
+                else -> null
+            }
+        }
+        .firstOrNull()
+        ?: 0.0
+
+    private fun JSONObject.firstIntOrNull(vararg keys: String): Int? = keys
+        .asSequence()
+        .mapNotNull { key ->
+            when (val value = opt(key)) {
+                is Number -> value.toInt()
+                is String -> value.trim().toIntOrNull()
+                else -> null
+            }
+        }
+        .firstOrNull()
+
     private fun dayFromNumber(number: Int): DayOfWeek? = when (number) {
         1 -> DayOfWeek.MONDAY
         2 -> DayOfWeek.TUESDAY
@@ -272,4 +378,22 @@ class TsimsClient(baseUrl: String) : TsimsDataSource {
         if (has(key) && !isNull(key)) optInt(key) else null
 
     private fun String.encode(): String = URLEncoder.encode(this, StandardCharsets.UTF_8.name())
+}
+
+internal fun parseCasDate(raw: String): LocalDate? {
+    val value = raw.trim()
+    if (value.isBlank()) return null
+    Regex("""/Date\((\d+)""").find(value)?.groupValues?.getOrNull(1)?.toLongOrNull()?.let { millis ->
+        return Instant.ofEpochMilli(millis).atZone(ZoneId.of("Asia/Shanghai")).toLocalDate()
+    }
+    val normalized = value.substringBefore('T').substringBefore(' ')
+    val formatters = listOf(
+        DateTimeFormatter.ISO_LOCAL_DATE,
+        DateTimeFormatter.ofPattern("yyyy/M/d"),
+        DateTimeFormatter.ofPattern("M/d/yyyy"),
+        DateTimeFormatter.ofPattern("d/M/yyyy"),
+    )
+    return formatters.firstNotNullOfOrNull { formatter ->
+        runCatching { LocalDate.parse(normalized, formatter) }.getOrNull()
+    }
 }
