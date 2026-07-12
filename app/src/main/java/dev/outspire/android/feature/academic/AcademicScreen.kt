@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,6 +21,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -27,15 +30,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.MeetingRoom
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -45,7 +47,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,27 +65,31 @@ import dev.outspire.android.data.model.ClassPeriod
 import dev.outspire.android.data.model.PeriodPhase
 import dev.outspire.android.data.model.ScheduleEntry
 import dev.outspire.android.data.model.ScheduleResolver
+import dev.outspire.android.data.model.SemesterOption
 import dev.outspire.android.data.model.SchoolPeriods
 import dev.outspire.android.data.model.SchoolWeek
 import dev.outspire.android.data.model.User
 import dev.outspire.android.designsystem.AppRadius
 import dev.outspire.android.designsystem.AppSpace
+import dev.outspire.android.designsystem.DetailBottomSheet
+import dev.outspire.android.designsystem.DetailInfoCard
+import dev.outspire.android.designsystem.DetailInfoRow
 import dev.outspire.android.designsystem.ErrorCard
 import dev.outspire.android.designsystem.LoadingCard
 import dev.outspire.android.designsystem.RichCard
 import dev.outspire.android.designsystem.ScreenTitle
+import dev.outspire.android.designsystem.SpringLoadingIndicator
+import dev.outspire.android.designsystem.TopChrome
 import java.time.DayOfWeek
 import java.time.Duration
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AcademicScreen(
     state: AcademicUiState,
@@ -93,90 +98,107 @@ fun AcademicScreen(
     onRefresh: () -> Unit,
     onSelectDate: (LocalDate) -> Unit,
     onToday: () -> Unit,
+    onSelectSemester: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var semesterMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var selectedPeriod by rememberSaveable { mutableStateOf<Int?>(null) }
+    val entries = ScheduleResolver.daySchedule(state.schedule, state.selectedDay)
 
-    Column(
+    LazyColumn(
         modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(AppSpace.cardSpacing),
+            .fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(AppSpace.sm),
     ) {
-        Spacer(Modifier.height(AppSpace.xs))
-        ClassHeader(
-            signedIn = user != null,
-            refreshing = state.isLoading,
-            onToday = onToday,
-            onRefresh = onRefresh,
-            onCalendar = { showDatePicker = true },
-            modifier = Modifier.padding(horizontal = AppSpace.lg),
-        )
-
-        WeekStrip(
-            selectedDate = state.selectedDate,
-            onSelectDate = onSelectDate,
-            modifier = Modifier.padding(horizontal = AppSpace.md),
-        )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
-
-        if (user == null) {
-            RichCard(modifier = Modifier.padding(horizontal = AppSpace.lg)) {
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpace.md)) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Login,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text("Sign in to load your timetable.", style = MaterialTheme.typography.titleMedium)
-                    Button(onClick = onSignIn) { Text("Open account") }
-                }
+        stickyHeader {
+            TopChrome {
+                ClassHeader(
+                    signedIn = user != null,
+                    refreshing = state.isLoading,
+                    semesters = state.semesters,
+                    selectedSemesterId = state.selectedSemesterId,
+                    semesterMenuExpanded = semesterMenuExpanded,
+                    onSemesterMenuExpandedChange = { semesterMenuExpanded = it },
+                    onSelectSemester = {
+                        semesterMenuExpanded = false
+                        onSelectSemester(it)
+                    },
+                    onToday = onToday,
+                    onRefresh = onRefresh,
+                    modifier = Modifier.padding(
+                        start = AppSpace.lg,
+                        top = AppSpace.xl,
+                        end = AppSpace.lg,
+                    ),
+                )
+                WeekStrip(
+                    selectedDate = state.selectedDate,
+                    onSelectDate = onSelectDate,
+                    modifier = Modifier.padding(horizontal = AppSpace.md),
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f))
             }
-            Spacer(Modifier.height(88.dp))
-            return@Column
         }
 
-        when {
-            state.isLoading && state.schedule.isEmpty() -> {
-                Box(Modifier.padding(horizontal = AppSpace.lg)) {
+        if (user == null) {
+            item {
+                RichCard(modifier = Modifier.padding(horizontal = AppSpace.lg, vertical = AppSpace.sm)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(AppSpace.md)) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Login,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text("Sign in to load your timetable.", style = MaterialTheme.typography.titleMedium)
+                        Button(onClick = onSignIn) { Text("Open account") }
+                    }
+                }
+            }
+        } else when {
+            state.isLoading && state.schedule.isEmpty() -> item {
+                Box(Modifier.padding(horizontal = AppSpace.lg, vertical = AppSpace.sm)) {
                     LoadingCard("Loading classes...")
                 }
             }
-            state.scheduleError != null && state.schedule.isEmpty() -> {
-                Box(Modifier.padding(horizontal = AppSpace.lg)) {
+            state.scheduleError != null && state.schedule.isEmpty() -> item {
+                Box(Modifier.padding(horizontal = AppSpace.lg, vertical = AppSpace.sm)) {
                     ErrorCard(state.scheduleError)
                 }
             }
-            else -> ClassList(
-                entries = ScheduleResolver.daySchedule(state.schedule, state.selectedDay),
-                selectedDate = state.selectedDate,
-                now = state.now,
-                onSelectPeriod = { selectedPeriod = it },
-                modifier = Modifier.padding(horizontal = AppSpace.lg),
-            )
+            else -> items(entries, key = ScheduleEntry::period) { entry ->
+                val period = SchoolPeriods.all.first { it.number == entry.period }
+                Box(
+                    modifier = Modifier.padding(
+                        start = AppSpace.lg,
+                        end = AppSpace.lg,
+                        top = if (entry.period == 1) AppSpace.xs else 0.dp,
+                    ),
+                ) {
+                    ClassPeriodCard(
+                        entry = entry,
+                        period = period,
+                        phase = periodPhase(state.selectedDate, period, state.now),
+                        now = state.now,
+                        onClick = { selectedPeriod = entry.period },
+                    )
+                }
+            }
         }
 
-        state.scheduleError?.takeIf { state.schedule.isNotEmpty() }?.let {
-            Box(Modifier.padding(horizontal = AppSpace.lg)) { ErrorCard(it) }
+        state.scheduleError?.takeIf { state.schedule.isNotEmpty() }?.let { error ->
+            item {
+                Box(Modifier.padding(horizontal = AppSpace.lg)) {
+                    ErrorCard(error)
+                }
+            }
         }
-        Spacer(Modifier.height(88.dp))
-    }
-
-    if (showDatePicker) {
-        ClassDatePicker(
-            selectedDate = state.selectedDate,
-            onDismiss = { showDatePicker = false },
-            onSelect = onSelectDate,
-        )
+        item { Spacer(Modifier.height(88.dp)) }
     }
 
     selectedPeriod?.let { periodNumber ->
-        val entry = ScheduleResolver
-            .daySchedule(state.schedule, state.selectedDay)
-            .firstOrNull { it.period == periodNumber }
+        val entry = entries.firstOrNull { it.period == periodNumber }
         if (entry != null) {
-            ClassDetailsDialog(
+            ClassDetailsSheet(
                 entry = entry,
                 period = SchoolPeriods.all.first { it.number == periodNumber },
                 onDismiss = { selectedPeriod = null },
@@ -189,15 +211,19 @@ fun AcademicScreen(
 private fun ClassHeader(
     signedIn: Boolean,
     refreshing: Boolean,
+    semesters: List<SemesterOption>,
+    selectedSemesterId: String?,
+    semesterMenuExpanded: Boolean,
+    onSemesterMenuExpandedChange: (Boolean) -> Unit,
+    onSelectSemester: (String) -> Unit,
     onToday: () -> Unit,
     onRefresh: () -> Unit,
-    onCalendar: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalAlignment = Alignment.Top,
     ) {
         Text(
             "Class",
@@ -222,17 +248,44 @@ private fun ClassHeader(
                 if (signedIn) {
                     IconButton(onClick = onRefresh, enabled = !refreshing) {
                         if (refreshing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                strokeWidth = 2.dp,
-                            )
+                            SpringLoadingIndicator(modifier = Modifier.size(22.dp))
                         } else {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh timetable")
                         }
                     }
                 }
-                IconButton(onClick = onCalendar) {
-                    Icon(Icons.Default.CalendarMonth, contentDescription = "Choose date")
+                Box {
+                    IconButton(onClick = { onSemesterMenuExpandedChange(true) }) {
+                        Icon(Icons.Default.CalendarMonth, contentDescription = "Choose semester")
+                    }
+                    DropdownMenu(
+                        expanded = semesterMenuExpanded,
+                        onDismissRequest = { onSemesterMenuExpandedChange(false) },
+                    ) {
+                        if (semesters.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("No semesters available") },
+                                onClick = { onSemesterMenuExpandedChange(false) },
+                                enabled = false,
+                            )
+                        } else {
+                            semesters.forEach { semester ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            semester.label,
+                                            fontWeight = if (semester.id == selectedSemesterId) {
+                                                FontWeight.Bold
+                                            } else {
+                                                FontWeight.Normal
+                                            },
+                                        )
+                                    },
+                                    onClick = { onSelectSemester(semester.id) },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -323,31 +376,6 @@ private fun WeekStrip(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ClassList(
-    entries: List<ScheduleEntry>,
-    selectedDate: LocalDate,
-    now: LocalDateTime,
-    onSelectPeriod: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(AppSpace.sm),
-    ) {
-        entries.forEach { entry ->
-            val period = SchoolPeriods.all.first { it.number == entry.period }
-            ClassPeriodCard(
-                entry = entry,
-                period = period,
-                phase = periodPhase(selectedDate, period, now),
-                now = now,
-                onClick = { onSelectPeriod(entry.period) },
-            )
         }
     }
 }
@@ -474,64 +502,44 @@ private fun ClassPeriodCard(
 }
 
 @Composable
-private fun ClassDetailsDialog(
+private fun ClassDetailsSheet(
     entry: ScheduleEntry,
     period: ClassPeriod,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(entry.subject) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpace.sm)) {
-                Text("Period ${period.number} · ${periodTime(period)}")
-                if (entry.representsSelfStudy) {
-                    Text("Free Period")
-                } else {
-                    Text("Teacher: ${entry.teacher?.takeIf(String::isNotBlank) ?: "Unavailable"}")
-                    Text("Room: ${entry.room?.takeIf(String::isNotBlank) ?: "Unavailable"}")
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
-        },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ClassDatePicker(
-    selectedDate: LocalDate,
-    onDismiss: () -> Unit,
-    onSelect: (LocalDate) -> Unit,
-) {
-    val pickerState = rememberDatePickerState(
-        initialSelectedDateMillis = selectedDate
-            .atStartOfDay(ZoneOffset.UTC)
-            .toInstant()
-            .toEpochMilli(),
-    )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    pickerState.selectedDateMillis?.let { millis ->
-                        onSelect(Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate())
-                    }
-                    onDismiss()
-                },
-                enabled = pickerState.selectedDateMillis != null,
-            ) {
-                Text("Select")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
+    val accent = classGradient(entry)
+    DetailBottomSheet(
+        title = entry.subject,
+        subtitle = "Period ${period.number} · ${periodTime(period)}",
+        colors = accent,
+        onDismiss = onDismiss,
     ) {
-        DatePicker(state = pickerState)
+        DetailInfoCard {
+            if (entry.representsSelfStudy) {
+                DetailInfoRow(Icons.Default.MenuBook, "Type", "Free period", accent.first())
+            } else {
+                DetailInfoRow(
+                    Icons.Default.Person,
+                    "Teacher",
+                    entry.teacher?.takeIf(String::isNotBlank) ?: "Unavailable",
+                    accent.first(),
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                DetailInfoRow(
+                    Icons.Default.MeetingRoom,
+                    "Room",
+                    entry.room?.takeIf(String::isNotBlank) ?: "Unavailable",
+                    accent.first(),
+                )
+            }
+            HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+            DetailInfoRow(
+                Icons.Default.AccessTime,
+                "Duration",
+                "${Duration.between(period.start, period.end).toMinutes()} minutes",
+                accent.first(),
+            )
+        }
     }
 }
 

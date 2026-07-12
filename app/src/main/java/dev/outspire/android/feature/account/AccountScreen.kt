@@ -2,12 +2,14 @@ package dev.outspire.android.feature.account
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -15,7 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -32,12 +34,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.outspire.android.data.model.User
 import dev.outspire.android.designsystem.AppSpace
 import dev.outspire.android.designsystem.ErrorCard
 import dev.outspire.android.designsystem.RichCard
 import dev.outspire.android.designsystem.ScreenTitle
+import dev.outspire.android.designsystem.SpringLoadingIndicator
 
 @Composable
 fun AccountScreen(
@@ -45,8 +49,8 @@ fun AccountScreen(
     user: User?,
     onCodeChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
+    onRememberCredentialsChange: (Boolean) -> Unit,
     onLogin: () -> Unit,
-    onDemo: () -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,7 +75,7 @@ fun AccountScreen(
                     Icon(Icons.Default.Person, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     Text(user.name, style = MaterialTheme.typography.titleLarge)
                     Text(
-                        if (user.isDemo) "Demo profile" else "Student code ${user.code}",
+                        "Student code ${user.code}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
@@ -81,10 +85,7 @@ fun AccountScreen(
                         enabled = !state.isLoading,
                     ) {
                         if (state.isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.height(20.dp),
-                                strokeWidth = 2.dp,
-                            )
+                            SpringLoadingIndicator(modifier = Modifier.height(20.dp))
                         } else {
                             Text("Sign out")
                         }
@@ -135,15 +136,40 @@ fun AccountScreen(
                         },
                     ),
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .toggleable(
+                            value = state.rememberCredentials,
+                            enabled = !state.isLoading,
+                            role = Role.Checkbox,
+                            onValueChange = onRememberCredentialsChange,
+                        )
+                        .padding(vertical = AppSpace.xxs),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(AppSpace.xs),
+                ) {
+                    Checkbox(
+                        checked = state.rememberCredentials,
+                        onCheckedChange = null,
+                        enabled = !state.isLoading,
+                    )
+                    Column {
+                        Text("Remember credentials", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Encrypted on this device",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 Button(
                     onClick = onLogin,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !state.isLoading,
                 ) {
                     if (state.isLoading) {
-                        CircularProgressIndicator(
+                        SpringLoadingIndicator(
                             modifier = Modifier.height(20.dp),
-                            strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.onPrimary,
                         )
                     } else {
@@ -154,13 +180,10 @@ fun AccountScreen(
         }
 
         Text(
-            "Live mode uses the TSIMS address configured on this device. Credentials are held only in memory in this milestone.",
+            "Live mode uses the TSIMS address configured on this device. Saved credentials are protected by Android Keystore and can be removed by turning off Remember credentials.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        OutlinedButton(onClick = onDemo, modifier = Modifier.fillMaxWidth()) {
-            Text("Continue with demo data")
-        }
         Spacer(Modifier.height(72.dp))
     }
 }

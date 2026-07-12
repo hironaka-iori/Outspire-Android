@@ -1,6 +1,7 @@
 package dev.outspire.android.data.repository
 
 import dev.outspire.android.data.model.ScheduleEntry
+import dev.outspire.android.data.model.SemesterOption
 import dev.outspire.android.data.model.CasActivity
 import dev.outspire.android.data.model.User
 import dev.outspire.android.data.remote.TsimsDataSource
@@ -116,7 +117,13 @@ class DefaultOutspireRepositoryTest {
 
         override fun clearSession() = Unit
 
-        override suspend fun loadTimetable(user: User): Result<List<ScheduleEntry>> =
+        override suspend fun loadTimetable(
+            user: User,
+            semesterId: String?,
+        ): Result<List<ScheduleEntry>> =
+            Result.success(emptyList())
+
+        override suspend fun loadSemesters(user: User): Result<List<SemesterOption>> =
             Result.success(emptyList())
 
         override suspend fun loadActivities(user: User): Result<List<CasActivity>> =

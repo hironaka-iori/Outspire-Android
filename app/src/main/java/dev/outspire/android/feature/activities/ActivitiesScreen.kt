@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,21 +18,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,11 +53,16 @@ import dev.outspire.android.data.model.CasActivity
 import dev.outspire.android.data.model.User
 import dev.outspire.android.designsystem.AppRadius
 import dev.outspire.android.designsystem.AppSpace
+import dev.outspire.android.designsystem.DetailBottomSheet
+import dev.outspire.android.designsystem.DetailInfoCard
+import dev.outspire.android.designsystem.DetailInfoRow
 import dev.outspire.android.designsystem.ErrorCard
 import dev.outspire.android.designsystem.GradientCard
 import dev.outspire.android.designsystem.LoadingCard
 import dev.outspire.android.designsystem.RichCard
 import dev.outspire.android.designsystem.StatusPill
+import dev.outspire.android.designsystem.SpringLoadingIndicator
+import dev.outspire.android.designsystem.TopChrome
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -75,81 +84,106 @@ fun ActivitiesScreen(
                 activity.reflection.contains(query, ignoreCase = true))
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = AppSpace.lg),
-        verticalArrangement = Arrangement.spacedBy(AppSpace.cardSpacing),
-    ) {
-        Spacer(Modifier.padding(top = AppSpace.xs))
-        ActivitiesHeader(
-            signedIn = user != null,
-            refreshing = state.isLoading,
-            onRefresh = onRefresh,
-        )
-
-        if (user == null) {
-            RichCard {
-                Column(verticalArrangement = Arrangement.spacedBy(AppSpace.md)) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.Login,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                    Text("Sign in to see your CAS records.", style = MaterialTheme.typography.titleMedium)
-                    Button(onClick = onSignIn) { Text("Open account") }
-                }
-            }
-            return@Column
-        }
-
-        if (state.activities.isNotEmpty()) {
-            ActivitySummary(state.activities)
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                placeholder = { Text("Search activities or reflections") },
-                shape = RoundedCornerShape(AppRadius.lg),
+    Column(modifier = modifier.fillMaxSize()) {
+        TopChrome {
+            ActivitiesHeader(
+                signedIn = user != null,
+                refreshing = state.isLoading,
+                onRefresh = onRefresh,
+                modifier = Modifier.padding(
+                    start = AppSpace.lg,
+                    top = AppSpace.xl,
+                    end = AppSpace.lg,
+                    bottom = AppSpace.xs,
+                ),
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(AppSpace.xs),
-            ) {
-                listOf(ALL_CLUBS).plus(clubs).forEach { club ->
-                    ActivityFilter(
-                        label = club,
-                        selected = selectedClub == club,
-                        onClick = { selectedClub = club },
-                    )
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(
+                start = AppSpace.lg,
+                end = AppSpace.lg,
+                top = AppSpace.md,
+                bottom = 88.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(AppSpace.cardSpacing),
+        ) {
+            if (user == null) {
+                item {
+                    RichCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(AppSpace.md)) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Login,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text("Sign in to see your CAS records.", style = MaterialTheme.typography.titleMedium)
+                            Button(onClick = onSignIn) { Text("Open account") }
+                        }
+                    }
+                }
+            } else {
+                if (state.activities.isNotEmpty()) {
+                    item { ActivitySummary(state.activities) }
+                    item {
+                        OutlinedTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            placeholder = { Text("Search activities or reflections") },
+                            shape = RoundedCornerShape(AppRadius.lg),
+                        )
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(AppSpace.xs),
+                        ) {
+                            listOf(ALL_CLUBS).plus(clubs).forEach { club ->
+                                ActivityFilter(
+                                    label = club,
+                                    selected = selectedClub == club,
+                                    onClick = { selectedClub = club },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                when {
+                    state.isLoading && state.activities.isEmpty() -> item {
+                        LoadingCard("Loading CAS records...")
+                    }
+                    state.error != null && state.activities.isEmpty() -> item {
+                        ErrorCard(state.error)
+                    }
+                    filteredActivities.isEmpty() -> item {
+                        RichCard {
+                            Text(
+                                if (state.activities.isEmpty()) "No activity records yet."
+                                else "No matching activities.",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                    }
+                    else -> items(filteredActivities, key = CasActivity::id) { activity ->
+                        ActivityCard(activity, onClick = { selectedActivity = activity })
+                    }
+                }
+                state.error?.takeIf { state.activities.isNotEmpty() }?.let { error ->
+                    item { ErrorCard(error) }
                 }
             }
         }
-
-        when {
-            state.isLoading && state.activities.isEmpty() -> LoadingCard("Loading CAS records...")
-            state.error != null && state.activities.isEmpty() -> ErrorCard(state.error)
-            filteredActivities.isEmpty() -> RichCard {
-                Text(
-                    if (state.activities.isEmpty()) "No activity records yet." else "No matching activities.",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
-            else -> filteredActivities.forEach { activity ->
-                ActivityCard(activity, onClick = { selectedActivity = activity })
-            }
-        }
-        state.error?.takeIf { state.activities.isNotEmpty() }?.let { ErrorCard(it) }
-        Spacer(Modifier.padding(bottom = 88.dp))
     }
 
     selectedActivity?.let { activity ->
-        ActivityDetailsDialog(activity, onDismiss = { selectedActivity = null })
+        ActivityDetailsSheet(activity, onDismiss = { selectedActivity = null })
     }
 }
 
@@ -158,9 +192,10 @@ private fun ActivitiesHeader(
     signedIn: Boolean,
     refreshing: Boolean,
     onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -179,7 +214,7 @@ private fun ActivitiesHeader(
         if (signedIn) {
             IconButton(onClick = onRefresh, enabled = !refreshing) {
                 if (refreshing) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                    SpringLoadingIndicator(modifier = Modifier.size(22.dp))
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = "Refresh activities")
                 }
@@ -310,24 +345,72 @@ private fun ActivityCard(activity: CasActivity, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ActivityDetailsDialog(activity: CasActivity, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(activity.title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(AppSpace.sm)) {
-                Text("${activity.club} · ${formatDate(activity)}")
-                Row(horizontalArrangement = Arrangement.spacedBy(AppSpace.xs)) {
-                    durationBadges(activity).forEach { (label, color) -> StatusPill(label, color) }
-                }
+private fun ActivityDetailsSheet(activity: CasActivity, onDismiss: () -> Unit) {
+    val colors = listOf(Color(0xFF2E7D5A), Color(0xFF365F9D))
+    val accent = colors.first()
+    DetailBottomSheet(
+        title = activity.title,
+        subtitle = "${activity.club} · ${formatDate(activity)}",
+        colors = colors,
+        onDismiss = onDismiss,
+    ) {
+        DetailInfoCard {
+            DetailInfoRow(Icons.Default.Groups, "Club", activity.club, accent)
+            HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+            DetailInfoRow(
+                Icons.Default.AccessTime,
+                "Total time",
+                "${formatHours(activity.hours)} hours",
+                accent,
+            )
+            HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+            DetailInfoRow(
+                Icons.Default.Verified,
+                "Status",
+                when (activity.confirmed) {
+                    true -> "Confirmed"
+                    false -> "Awaiting confirmation"
+                    null -> "Recorded"
+                },
+                accent,
+            )
+        }
+
+        if (durationBadges(activity).isNotEmpty()) {
+            DetailInfoCard {
                 Text(
-                    activity.reflection.ifBlank { "No reflection has been added to this record." },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "CAS contribution",
+                    modifier = Modifier.padding(top = AppSpace.md, bottom = AppSpace.sm),
+                    style = MaterialTheme.typography.titleMedium,
                 )
+                Row(
+                    modifier = Modifier.padding(bottom = AppSpace.md),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpace.xs),
+                ) {
+                    durationBadges(activity).forEach { (label, color) ->
+                        StatusPill(label, color)
+                    }
+                }
             }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
-    )
+        }
+
+        DetailInfoCard {
+            Row(
+                modifier = Modifier.padding(top = AppSpace.md, bottom = AppSpace.sm),
+                horizontalArrangement = Arrangement.spacedBy(AppSpace.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.MenuBook, contentDescription = null, tint = accent)
+                Text("Reflection", style = MaterialTheme.typography.titleMedium)
+            }
+            Text(
+                activity.reflection.ifBlank { "No reflection has been added to this record." },
+                modifier = Modifier.padding(bottom = AppSpace.md),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 private fun durationBadges(activity: CasActivity): List<Pair<String, Color>> = buildList {

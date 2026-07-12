@@ -2,6 +2,8 @@ package dev.outspire.android.navigation
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -28,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.outspire.android.data.repository.OutspireRepository
+import dev.outspire.android.data.repository.ServiceLocator
 import dev.outspire.android.designsystem.OutspireBackground
 import dev.outspire.android.feature.ViewModelFactory
 import dev.outspire.android.feature.account.AccountScreen
@@ -56,10 +59,12 @@ fun OutspireRoot(
     modifier: Modifier = Modifier,
 ) {
     val accountViewModel: AccountViewModel = viewModel(
-        factory = ViewModelFactory { AccountViewModel(repository) },
+        factory = ViewModelFactory {
+            AccountViewModel(repository, ServiceLocator.credentialRecorder)
+        },
     )
     val todayViewModel: TodayViewModel = viewModel(
-        factory = ViewModelFactory { TodayViewModel(repository) },
+        factory = ViewModelFactory { TodayViewModel(repository, ServiceLocator.scheduleSettings) },
     )
     val academicViewModel: AcademicViewModel = viewModel(
         factory = ViewModelFactory { AcademicViewModel(repository) },
@@ -77,7 +82,7 @@ fun OutspireRoot(
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.TODAY) }
     var detail by rememberSaveable { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(user?.code, user?.isDemo) {
+    LaunchedEffect(user?.code) {
         if (user != null) {
             todayViewModel.load()
             academicViewModel.load()
@@ -90,6 +95,7 @@ fun OutspireRoot(
     OutspireBackground(modifier) {
         Scaffold(
             containerColor = Color.Transparent,
+            contentWindowInsets = WindowInsets.safeDrawing,
             topBar = {
                 if (detail != null) {
                     TopAppBar(
@@ -124,8 +130,8 @@ fun OutspireRoot(
                     user = user,
                     onCodeChange = accountViewModel::setCode,
                     onPasswordChange = accountViewModel::setPassword,
+                    onRememberCredentialsChange = accountViewModel::setRememberCredentials,
                     onLogin = { accountViewModel.login { detail = null } },
-                    onDemo = { accountViewModel.enterDemo { detail = null } },
                     onLogout = { accountViewModel.logout {} },
                     modifier = contentModifier,
                 )
@@ -144,6 +150,11 @@ fun OutspireRoot(
                             todayViewModel.load(forceRefresh = true)
                             academicViewModel.load(forceRefresh = true)
                         },
+                        onSelectScheduleDay = todayViewModel::setDayOverride,
+                        onHolidayEnabled = todayViewModel::setHolidayEnabled,
+                        onHolidayEndDateEnabled = todayViewModel::setHolidayEndDateEnabled,
+                        onHolidayEndDate = todayViewModel::setHolidayEndDate,
+                        onShowFutureCountdown = todayViewModel::setShowFutureCountdown,
                         onClasses = { selectedTab = AppTab.CLASSES },
                         onActivities = { selectedTab = AppTab.ACTIVITIES },
                         onGrades = { detail = "scores" },
@@ -156,6 +167,7 @@ fun OutspireRoot(
                         onRefresh = { academicViewModel.load(forceRefresh = true) },
                         onSelectDate = academicViewModel::selectDate,
                         onToday = academicViewModel::selectToday,
+                        onSelectSemester = academicViewModel::selectSemester,
                         modifier = contentModifier,
                     )
                     AppTab.ACTIVITIES -> ActivitiesScreen(

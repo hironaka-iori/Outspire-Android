@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.outspire.android.data.model.ScheduleEntry
 import dev.outspire.android.data.model.SchoolTime
+import dev.outspire.android.data.model.SemesterOption
 import dev.outspire.android.data.model.SubjectScore
 import dev.outspire.android.data.repository.OutspireRepository
 import java.time.DayOfWeek
@@ -23,6 +24,8 @@ data class AcademicUiState(
     val isLoading: Boolean = false,
     val schedule: List<ScheduleEntry> = emptyList(),
     val scores: List<SubjectScore> = emptyList(),
+    val semesters: List<SemesterOption> = emptyList(),
+    val selectedSemesterId: String? = null,
     val selectedDate: LocalDate = nearestSchoolDate(SchoolTime.now().toLocalDate()),
     val now: LocalDateTime = SchoolTime.now(),
     val scheduleError: String? = null,
@@ -66,11 +69,43 @@ class AcademicViewModel(
 
     fun selectToday() = selectDate(SchoolTime.now().toLocalDate())
 
+    fun selectSemester(id: String) {
+        if (id == mutableState.value.selectedSemesterId || mutableState.value.isLoading) return
+        viewModelScope.launch {
+            mutableState.update {
+                it.copy(isLoading = true, selectedSemesterId = id, scheduleError = null)
+            }
+            repository.loadSchedule(semesterId = id)
+                .onSuccess { schedule ->
+                    mutableState.update { it.copy(isLoading = false, schedule = schedule) }
+                }
+                .onFailure { failure ->
+                    mutableState.update {
+                        it.copy(
+                            isLoading = false,
+                            scheduleError = failure.message ?: "Unable to load that semester.",
+                        )
+                    }
+                }
+        }
+    }
+
     fun load(forceRefresh: Boolean = false) {
         if (mutableState.value.isLoading) return
         viewModelScope.launch {
             mutableState.update { it.copy(isLoading = true, scheduleError = null, scoreError = null) }
-            val schedule = async { repository.loadSchedule(forceRefresh) }
+            val semestersResult = repository.loadSemesters()
+            val oldState = mutableState.value
+            val semesters = semestersResult.getOrDefault(oldState.semesters)
+            val selectedSemesterId = oldState.selectedSemesterId
+                ?.takeIf { selected -> semesters.any { it.id == selected } }
+                ?: semesters.firstOrNull()?.id
+            val schedule = async {
+                repository.loadSchedule(
+                    forceRefresh = forceRefresh,
+                    semesterId = selectedSemesterId,
+                )
+            }
             val scores = async { repository.loadScores() }
             val scheduleResult = schedule.await()
             val scoreResult = scores.await()
@@ -79,7 +114,10 @@ class AcademicViewModel(
                     isLoading = false,
                     schedule = scheduleResult.getOrDefault(old.schedule),
                     scores = scoreResult.getOrDefault(old.scores),
-                    scheduleError = scheduleResult.exceptionOrNull()?.message,
+                    semesters = semesters,
+                    selectedSemesterId = selectedSemesterId,
+                    scheduleError = scheduleResult.exceptionOrNull()?.message
+                        ?: semestersResult.exceptionOrNull()?.message,
                     scoreError = scoreResult.exceptionOrNull()?.message,
                 )
             }

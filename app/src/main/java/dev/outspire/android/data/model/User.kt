@@ -5,5 +5,4 @@ data class User(
     val code: String,
     val name: String,
     val role: String?,
-    val isDemo: Boolean = false,
 )

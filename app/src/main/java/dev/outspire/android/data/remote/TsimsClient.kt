@@ -2,6 +2,7 @@ package dev.outspire.android.data.remote
 
 import dev.outspire.android.data.model.CasActivity
 import dev.outspire.android.data.model.ScheduleEntry
+import dev.outspire.android.data.model.SemesterOption
 import dev.outspire.android.data.model.User
 import java.net.CookieHandler
 import java.net.CookieManager
@@ -26,7 +27,8 @@ interface TsimsDataSource {
     suspend fun login(code: String, password: String): Result<User>
     suspend fun logout()
     fun clearSession()
-    suspend fun loadTimetable(user: User): Result<List<ScheduleEntry>>
+    suspend fun loadTimetable(user: User, semesterId: String? = null): Result<List<ScheduleEntry>>
+    suspend fun loadSemesters(user: User): Result<List<SemesterOption>>
     suspend fun loadActivities(user: User): Result<List<CasActivity>>
 }
 
@@ -59,8 +61,11 @@ class TsimsClient(baseUrl: String) : TsimsDataSource {
         runCatching { fetchProfile(loginUser) }.getOrDefault(loginUser)
     }.onFailure { clearSession() }
 
-    override suspend fun loadTimetable(user: User): Result<List<ScheduleEntry>> = runCatching {
-        val yearId = fetchYearOptions().firstOrNull()?.first
+    override suspend fun loadTimetable(
+        user: User,
+        semesterId: String?,
+    ): Result<List<ScheduleEntry>> = runCatching {
+        val yearId = semesterId ?: fetchYearOptions().firstOrNull()?.first
             ?: error("No academic year was returned by TSIMS.")
         val form = buildMap {
             put("yearId", yearId)
@@ -69,6 +74,10 @@ class TsimsClient(baseUrl: String) : TsimsDataSource {
         val envelope = postForm("/Stu/Timetable/GetTimetableByStudent", form)
         check(envelope.resultIsSuccess()) { envelope.optString("Message", "Timetable request failed") }
         parseTimetable(envelope.opt("Data"))
+    }
+
+    override suspend fun loadSemesters(user: User): Result<List<SemesterOption>> = runCatching {
+        fetchYearOptions().map { (id, label) -> SemesterOption(id, label) }
     }
 
     override suspend fun loadActivities(user: User): Result<List<CasActivity>> = runCatching {

@@ -13,6 +13,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        ServiceLocator.initialize(applicationContext)
         splashScreen.setOnExitAnimationListener { splashScreenView ->
             splashScreenView.remove()
         }
